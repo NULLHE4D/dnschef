@@ -52,6 +52,8 @@ import binascii
 import string
 import base64
 
+ip0 = ""
+ip1 = ""
 
 class DNSChefFormatter(logging.Formatter):
 
@@ -186,7 +188,9 @@ class DNSHandler():
                     else:
                         # dnslib doesn't like trailing dots
                         if fake_record[-1] == ".": fake_record = fake_record[:-1]
-                        response.add_answer(RR(qname, getattr(QTYPE,qtype), rdata=RDMAP[qtype](fake_record)))
+                        response.add_answer(RR(qname, getattr(QTYPE,qtype), rdata=RDMAP[qtype](ip0 if self.server.counters[qname]%2==0 else ip1)))
+
+                        if qname in self.server.counters: self.server.counters[qname] += 1
 
                     response = response.pack()
 
@@ -379,6 +383,7 @@ class ThreadedUDPServer(socketserver.ThreadingMixIn, socketserver.UDPServer):
 
     # Override SocketServer.UDPServer to add extra parameters
     def __init__(self, server_address, RequestHandlerClass, nametodns, nameservers, ipv6, log):
+        self.counters = {name:0 for name in nametodns["A"]}
         self.nametodns  = nametodns
         self.nameservers = nameservers
         self.ipv6        = ipv6
@@ -455,6 +460,7 @@ if __name__ == "__main__":
 
     fakegroup = parser.add_argument_group("Fake DNS records:")
     fakegroup.add_argument('--fakeip', metavar="192.0.2.1", help='IP address to use for matching DNS queries. If you use this parameter without specifying domain names, then all \'A\' queries will be spoofed. Consider using --file argument if you need to define more than one IP address.')
+    fakegroup.add_argument('--fakeip1', metavar="192.0.2.1", help='(alternate) IP address to use for matching DNS queries. If you use this parameter without specifying domain names, then all \'A\' queries will be spoofed. Consider using --file argument if you need to define more than one IP address.')
     fakegroup.add_argument('--fakeipv6', metavar="2001:db8::1", help='IPv6 address to use for matching DNS queries. If you use this parameter without specifying domain names, then all \'AAAA\' queries will be spoofed. Consider using --file argument if you need to define more than one IPv6 address.')
     fakegroup.add_argument('--fakemail', metavar="mail.fake.com", help='MX name to use for matching DNS queries. If you use this parameter without specifying domain names, then all \'MX\' queries will be spoofed. Consider using --file argument if you need to define more than one MX record.')
     fakegroup.add_argument('--fakealias', metavar="www.fake.com", help='CNAME name to use for matching DNS queries. If you use this parameter without specifying domain names, then all \'CNAME\' queries will be spoofed. Consider using --file argument if you need to define more than one CNAME record.')
@@ -535,6 +541,9 @@ if __name__ == "__main__":
         fakemail   = options.fakemail
         fakealias  = options.fakealias
         fakens     = options.fakens
+
+        ip0 = fakeip
+        ip1 = options.fakeip1 if options.fakeip1 else ip0
 
         if options.fakedomains:
             for domain in options.fakedomains.split(','):
